@@ -13,19 +13,25 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget
+          sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget unzip
 
-      - name: Clone Clang r450784e
+      - name: Download Clang from My Release
         run: |
-          # 直接克隆整个工具链仓库
-          git clone --depth=1 https://github.com/snove520/clang-r450784e.git clang
+          mkdir clang && cd clang
           
-          # 查找真正的 bin 目录（防止工具链嵌套太深）
-          CLANG_BIN_DIR=$(find $GITHUB_WORKSPACE/clang -name "clang" -type f -executable | head -n 1 | xargs dirname)
+          # 使用你刚刚上传的专属 Release 链接
+          wget -q https://github.com/Can186/RedmiK60Pro/releases/download/clang/clang-r450784e-main.zip
           
-          # 设置权限，并把真实路径存到环境变量中供下一步使用
-          chmod +x $CLANG_BIN_DIR/*
-          echo "REAL_CLANG_BIN=$CLANG_BIN_DIR" >> $GITHUB_ENV
+          # 解压
+          unzip -q clang-r450784e-main.zip
+          
+          # 把里层的文件全部挪到外层来
+          mv clang-r450784e-main/* .
+          rm -rf clang-r450784e-main clang-r450784e-main.zip
+          
+          # 赋予执行权限并验证
+          chmod +x bin/*
+          ls -la bin/clang
 
       - name: Configure and Build Kernel
         run: |
@@ -33,20 +39,20 @@ jobs:
           export LLVM=1
           export LLVM_IAS=1
           
-          # 【关键修复】直接使用上一步存入的全局环境变量，不要用
-          export PATH="$REAL_CLANG_BIN:$PATH"
+          # 指向外层纯粹的 bin 目录
+          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
           
-          # 打印验证一下，确保 clang 和 ld.lld 都找得到
+          # 打印验证
           echo "--- Checking Toolchain ---"
           which clang
           which ld.lld
           clang --version
           echo "--------------------------"
           
-          # 配置编译
+          # 配置（无需 savedefconfig）
           make O=out ARCH=arm64 gki_defconfig
           
-          # 【关键修复】去掉了 savedefconfig，直接开始编译！
+          # 满核多线程编译
           make O=out ARCH=arm64 -j$(nproc)
 
       - name: Upload Kernel Image
