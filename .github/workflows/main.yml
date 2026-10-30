@@ -18,9 +18,14 @@ jobs:
       - name: Download AOSP Clang r450784e
         run: |
           mkdir clang && cd clang
-          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android13-release/clang-r450784e.tar.gz
-          tar -xzf clang-r450784e.tar.gz
-          rm clang-r450784e.tar.gz
+          # 使用 GitLab 镜像下载
+          wget -q https://gitlab.com/mcdofrenchfreis/android-clang-14.0.7/-/archive/main/android-clang-14.0.7-main.tar.gz
+          
+          # 注意：通过 archive 下载的通常是一个包含 clang 文件夹的外层目录，解压后需要调整一下路径
+          tar -xzf android-clang-14.0.7-main.tar.gz
+          
+          # 将解压后的实际 bin 目录移动或链接出来
+          # （具体文件夹名取决于仓库结构，通常是 android-clang-14.0.7-main/bin）
 
       - name: Configure and Build Kernel
         run: |
