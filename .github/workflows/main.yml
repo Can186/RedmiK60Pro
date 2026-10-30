@@ -1,0 +1,45 @@
+name: Build K60 Kernel
+
+on:
+  workflow_dispatch: # 允许你在网页上手动点击按钮触发编译
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget
+
+      - name: Download AOSP Clang r450784e
+        run: |
+          mkdir clang && cd clang
+          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android13-release/clang-r450784e.tar.gz
+          tar -xzf clang-r450784e.tar.gz
+          rm clang-r450784e.tar.gz
+
+      - name: Configure and Build Kernel
+        run: |
+          export ARCH=arm64
+          export LLVM=1
+          export LLVM_IAS=1
+          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+          
+          # 生成配置文件 (如果找不到socrates_defconfig，可尝试gki_defconfig)
+          make O=out ARCH=arm64 gki_defconfig
+          
+          # 多核并行编译
+          make O=out ARCH=arm64 -j$(nproc)
+
+      - name: Upload Kernel Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: K60-Kernel-Image
+          path: |
+            out/arch/arm64/boot/Image
+            out/arch/arm64/boot/Image.gz
+            out/arch/arm64/boot/Image.lz4
