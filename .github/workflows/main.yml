@@ -1,7 +1,7 @@
 name: Build K60 Kernel
 
 on:
-  workflow_dispatch: # 允许你在网页上手动点击按钮触发编译
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,29 +15,38 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget
 
-      - name: Download AOSP Clang r450784e
+      - name: Clone Clang r450784e
         run: |
-          mkdir clang && cd clang
-          # 使用 GitLab 镜像下载
-          wget -q https://gitlab.com/mcdofrenchfreis/android-clang-14.0.7/-/archive/main/android-clang-14.0.7-main.tar.gz
+          # 直接克隆整个工具链仓库
+          git clone --depth=1 https://github.com/snove520/clang-r450784e.git clang
           
-          # 注意：通过 archive 下载的通常是一个包含 clang 文件夹的外层目录，解压后需要调整一下路径
-          tar -xzf android-clang-14.0.7-main.tar.gz
+          # 查找真正的 bin 目录（防止工具链嵌套太深）
+          CLANG_BIN_DIR=$(find $GITHUB_WORKSPACE/clang -name "clang" -type f -executable | head -n 1 | xargs dirname)
           
-          # 将解压后的实际 bin 目录移动或链接出来
-          # （具体文件夹名取决于仓库结构，通常是 android-clang-14.0.7-main/bin）
+          # 设置权限，并把真实路径存到环境变量中供下一步使用
+          chmod +x $CLANG_BIN_DIR/*
+          echo "REAL_CLANG_BIN=$CLANG_BIN_DIR" >> $GITHUB_ENV
 
       - name: Configure and Build Kernel
         run: |
           export ARCH=arm64
           export LLVM=1
           export LLVM_IAS=1
-          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
           
-          # 生成配置文件 (如果找不到socrates_defconfig，可尝试gki_defconfig)
+          # 【关键修复】直接使用上一步存入的全局环境变量，不要用
+          export PATH="$REAL_CLANG_BIN:$PATH"
+          
+          # 打印验证一下，确保 clang 和 ld.lld 都找得到
+          echo "--- Checking Toolchain ---"
+          which clang
+          which ld.lld
+          clang --version
+          echo "--------------------------"
+          
+          # 配置编译
           make O=out ARCH=arm64 gki_defconfig
           
-          # 多核并行编译
+          # 【关键修复】去掉了 savedefconfig，直接开始编译！
           make O=out ARCH=arm64 -j$(nproc)
 
       - name: Upload Kernel Image
