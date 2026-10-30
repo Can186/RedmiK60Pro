@@ -1,7 +1,6 @@
 name: Build K60 Kernel
 
-on:
-  workflow_dispatch:
+on: push
 
 jobs:
   build:
@@ -10,28 +9,30 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Install Dependencies & Git LFS
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget unzip
+          sudo apt-get install -y build-essential git git-lfs flex bison libssl-dev libelf-dev bc cpio rsync wget unzip
+          # 【关键】必须安装并初始化 Git LFS，否则拉下来的只是小体积的指针文件
+          git lfs install
 
-      - name: Download Clang from My Release
+      - name: Clone Clang from My Repo
         run: |
-          mkdir clang && cd clang
+          # 直接克隆你的仓库。使用 git lfs pull 确保大文件下载下来
+          git clone --depth=1 https://github.com/Can186/clang-r450784e.git clang
+          cd clang
+          git lfs pull
           
-          # 使用你刚刚上传的专属 Release 链接
-          wget -q https://github.com/Can186/RedmiK60Pro/releases/download/clang/clang-r450784e-main.zip
-          
-          # 解压
-          unzip -q clang-r450784e-main.zip
-          
-          # 把里层的文件全部挪到外层来
-          mv clang-r450784e-main/* .
-          rm -rf clang-r450784e-main clang-r450784e-main.zip
-          
-          # 赋予执行权限并验证
-          chmod +x bin/*
-          ls -la bin/clang
+          # 检查一下 clang 到底在哪一层。如果是直接在根目录的 bin 下：
+          if [ -d "bin" ]; then
+            chmod +x bin/*
+            echo "REAL_CLANG_BIN=$GITHUB_WORKSPACE/clang/bin" >> $GITHUB_ENV
+          else
+            # 如果是套了一层文件夹（比如 clang-r450784e/bin），我们自动找出来
+            BIN_DIR=$(find . -name "clang" -type f -executable | head -n 1 | xargs dirname)
+            chmod +x $BIN_DIR/*
+            echo "REAL_CLANG_BIN=$GITHUB_WORKSPACE/clang/$BIN_DIR" >> $GITHUB_ENV
+          fi
 
       - name: Configure and Build Kernel
         run: |
@@ -39,8 +40,8 @@ jobs:
           export LLVM=1
           export LLVM_IAS=1
           
-          # 指向外层纯粹的 bin 目录
-          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+          # 使用上一步找到的 bin 路径
+          export PATH="$REAL_CLANG_BIN:$PATH"
           
           # 打印验证
           echo "--- Checking Toolchain ---"
@@ -49,10 +50,10 @@ jobs:
           clang --version
           echo "--------------------------"
           
-          # 配置（无需 savedefconfig）
+          # 配置编译
           make O=out ARCH=arm64 gki_defconfig
           
-          # 满核多线程编译
+          # 满核编译
           make O=out ARCH=arm64 -j$(nproc)
 
       - name: Upload Kernel Image
