@@ -1,7 +1,7 @@
 name: Build K60 Kernel
 
 on:
-  workflow_dispatch:
+  push
 
 jobs:
   build:
@@ -20,7 +20,7 @@ jobs:
           mkdir -p clang && cd clang
           
           # 用 wget 下载，加大重试次数，防止断流
-          wget -q --tries=5 --timeout=60 -O clang-r450784e-main.zip https://github.com/Can186/RedmiK60Pro/releases/download/clang/clang-r450784e-main.zip
+          wget https://github.com/Can186/RedmiK60Pro/releases/download/clang/clang-r450784e-main.zip
           
           unzip -q clang-r450784e-main.zip
           mv clang-r450784e-main/* .
