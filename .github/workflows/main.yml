@@ -28,19 +28,20 @@ jobs:
           # 赋予权限
           chmod +x bin/*
 
-      - name: Configure and Build Kernel
+      - name: Fix Missing Files and Build Kernel
         run: |
           export ARCH=arm64
           export LLVM=1
           export LLVM_IAS=1
-          
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+          
+          # 【核心修复】自动注释掉小米源码里缺失的 hwid 引用
+          sed -i 's/source "drivers\/misc\/hwid\/Kconfig"/# &/' drivers/misc/Kconfig
           
           echo "--- Checking Toolchain ---"
           clang --version
           ld.lld --version
           echo "--------------------------"
-          
           # 配置并编译
           make O=out ARCH=arm64 gki_defconfig
           make O=out ARCH=arm64 -j$(nproc)
