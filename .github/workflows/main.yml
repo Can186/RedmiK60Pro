@@ -35,22 +35,27 @@ jobs:
           export LLVM_IAS=1
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
           
-          # 修复小米源码缺失的 hwid
+          # 修复缺失文件
           sed -i 's/source "drivers\/misc\/hwid\/Kconfig"/# &/' drivers/misc/Kconfig
           
-          echo "--- Checking Toolchain ---"
-          clang --version
-          echo "--------------------------"
-          
-          # 1. 生成基础配置
+          # 生成基础配置
           make O=out ARCH=arm64 gki_defconfig
           
-          # 2. 【核心防爆内存设置】关闭 LTO（链接时优化）和调试信息，极大降低内存占用
-          ./scripts/config --file out/.config --disable LTO_CLANG
+          # 【调整 LTO 策略】保留 THIN LTO 提升性能，坚决关闭最容易爆内存的 FULL LTO
+          ./scripts/config --file out/.config --enable LTO_CLANG
+          ./scripts/config --file out/.config --enable LTO_CLANG_THIN
+          ./scripts/config --file out/.config --disable LTO_CLANG_FULL
+          
+          # 重新同步配置（防止被覆盖）
           make O=out ARCH=arm64 olddefconfig
           
-          # 3. 编译，限制并发为 2 或 3（防止 OOM），你可以先用 -j2 试试
-          make O=out ARCH=arm64 -j2
+          # 检查最终状态
+          echo "--- Checking LTO Status ---"
+          grep "CONFIG_LTO_CLANG" out/.config || echo "No LTO found"
+          
+          # 【极其关键】为了防止 OOM，把编译线程数降到最低的 -j1 或 -j2
+          # 这会多花些时间，但是最有机会扛过 LTO 链接阶段
+          make O=out ARCH=arm64 -j1
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
