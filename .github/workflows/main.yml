@@ -46,7 +46,7 @@ jobs:
           make O=out ARCH=arm64 gki_defconfig
           
           # 2. 【核心防爆内存设置】关闭 LTO（链接时优化）和调试信息，极大降低内存占用
-          ./scripts/config --file out/.config -d LTO
+          ./scripts/config --file out/.config --disable LTO_CLANG
           make O=out ARCH=arm64 olddefconfig
           
           # 3. 编译，限制并发为 2 或 3（防止 OOM），你可以先用 -j2 试试
