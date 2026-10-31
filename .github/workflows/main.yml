@@ -32,7 +32,7 @@ jobs:
           sed -i 's/source "drivers\/misc\/hwid\/Kconfig"/# &/' drivers/misc/Kconfig
           
           # 1. 使用你上传的官方配置
-          make O=out ARCH=arm64 socrates_defconfig
+          make O=out ARCH=arm64 gki_defconfig
           
           # 2. 关掉导致报错的 BTF（不影响你的 eBPF 增强）
           ./scripts/config --file out/.config --disable DEBUG_INFO_BTF
