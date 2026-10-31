@@ -1,7 +1,7 @@
 name: Build K60 Kernel
 
 on:
-  workflow_dispatch:
+  push
 
 jobs:
   build:
@@ -10,29 +10,30 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Install Dependencies & Git LFS
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget unzip
+          sudo apt-get install -y build-essential git git-lfs flex bison libssl-dev libelf-dev bc cpio rsync wget unzip
+          # 必须初始化 LFS，否则下下来的只是指针文件
+          git lfs install
 
-      - name: Download Official AOSP Clang
+      - name: Clone and Setup Clang
         run: |
-          mkdir -p clang && cd clang
+          # 克隆仓库
+          git clone https://github.com/snove520/clang-r450784e.git clang
+          cd clang
           
-          # 加上 -L 跟随重定向，加 --header 防止被 Google 拒绝
-          wget -q -L -O clang.tar.gz \
-            --header="User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
-            https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r450784e.tar.gz
+          # 强制拉取 LFS 真实文件（这一步是关键）
+          git lfs pull
           
-          # 解压
-          tar -xzf clang.tar.gz
-          rm clang.tar.gz
+          # 很多时候仓库里会套一层文件夹，自动找一下 bin
+          BIN_DIR=$(find . -name "clang" -type f -executable | head -n 1 | xargs dirname)
+          echo "REAL_BIN_DIR=$PWD/$BIN_DIR" >> $GITHUB_ENV
           
-          # 验证架构（在 GitHub 服务器上必须输出 x86-64）
-          file bin/clang-14
+          # 检查文件架构
+          file $BIN_DIR/clang-14
           
-          # 赋予权限
-          chmod +x bin/*
+          chmod +x $BIN_DIR/*
 
       - name: Configure and Build Kernel
         run: |
@@ -40,14 +41,13 @@ jobs:
           export LLVM=1
           export LLVM_IAS=1
           
-          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+          export PATH="$REAL_BIN_DIR:$PATH"
           
           echo "--- Checking Toolchain ---"
           clang --version
           ld.lld --version
           echo "--------------------------"
           
-          # 配置并编译
           make O=out ARCH=arm64 gki_defconfig
           make O=out ARCH=arm64 -j$(nproc)
 
