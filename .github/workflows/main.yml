@@ -28,23 +28,29 @@ jobs:
           # 赋予权限
           chmod +x bin/*
 
-      - name: Fix Missing Files and Build Kernel
+      - name: Configure and Build Kernel
         run: |
           export ARCH=arm64
           export LLVM=1
           export LLVM_IAS=1
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
           
-          # 【核心修复】自动注释掉小米源码里缺失的 hwid 引用
+          # 修复小米源码缺失的 hwid
           sed -i 's/source "drivers\/misc\/hwid\/Kconfig"/# &/' drivers/misc/Kconfig
           
           echo "--- Checking Toolchain ---"
           clang --version
-          ld.lld --version
           echo "--------------------------"
-          # 配置并编译
+          
+          # 1. 生成基础配置
           make O=out ARCH=arm64 gki_defconfig
-          make O=out ARCH=arm64 -j$(nproc)
+          
+          # 2. 【核心防爆内存设置】关闭 LTO（链接时优化）和调试信息，极大降低内存占用
+          ./scripts/config --file out/.config -d LTO
+          make O=out ARCH=arm64 olddefconfig
+          
+          # 3. 编译，限制并发为 2 或 3（防止 OOM），你可以先用 -j2 试试
+          make O=out ARCH=arm64 -j2
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
