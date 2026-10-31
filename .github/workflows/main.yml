@@ -1,7 +1,7 @@
 name: Build K60 Kernel
 
 on:
-  push
+  push:
 
 jobs:
   build:
@@ -10,30 +10,23 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: Install Dependencies & Git LFS
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git git-lfs flex bison libssl-dev libelf-dev bc cpio rsync wget unzip
-          # 必须初始化 LFS，否则下下来的只是指针文件
-          git lfs install
+          sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget unzip
 
-      - name: Clone and Setup Clang
+      - name: Clone Clang from ArrowOS GitLab
         run: |
-          # 克隆仓库
-          git clone https://github.com/snove520/clang-r450784e.git clang
+          # 直接克隆 GitLab 仓库（不加 --depth=1 防止浅克隆丢掉文件）
+          git clone https://gitlab.com/arrowos-project/android_prebuilts_clang_host_linux-x86_clang-r450784e.git clang
+          
           cd clang
           
-          # 强制拉取 LFS 真实文件（这一步是关键）
-          git lfs pull
+          # 验证架构：必须输出 x86-64！如果输出 aarch64 就说明还是错的
+          file bin/clang-14
           
-          # 很多时候仓库里会套一层文件夹，自动找一下 bin
-          BIN_DIR=$(find . -name "clang" -type f -executable | head -n 1 | xargs dirname)
-          echo "REAL_BIN_DIR=$PWD/$BIN_DIR" >> $GITHUB_ENV
-          
-          # 检查文件架构
-          file $BIN_DIR/clang-14
-          
-          chmod +x $BIN_DIR/*
+          # 赋予权限
+          chmod +x bin/*
 
       - name: Configure and Build Kernel
         run: |
@@ -41,13 +34,14 @@ jobs:
           export LLVM=1
           export LLVM_IAS=1
           
-          export PATH="$REAL_BIN_DIR:$PATH"
+          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
           
           echo "--- Checking Toolchain ---"
           clang --version
           ld.lld --version
           echo "--------------------------"
           
+          # 配置并编译
           make O=out ARCH=arm64 gki_defconfig
           make O=out ARCH=arm64 -j$(nproc)
 
