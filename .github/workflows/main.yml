@@ -1,7 +1,7 @@
 name: Build K60 Kernel
 
 on:
-  push
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,46 +15,40 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget unzip
 
-      - name: Download Clang via wget
+      - name: Download Official AOSP Clang
         run: |
           mkdir -p clang && cd clang
           
-          # 【关键】用 wget 直接下载你的 Release 链接
-          # 加上 --tries=5 防止网络抽风断流
-          wget -q --tries=5 --timeout=60 -O clang-r450784e-main.zip https://github.com/Can186/RedmiK60Pro/releases/download/clang/clang-r450784e-main.zip
+          # 加上 -L 跟随重定向，加 --header 防止被 Google 拒绝
+          wget -q -L -O clang.tar.gz \
+            --header="User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+            https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r450784e.tar.gz
           
-          unzip -q clang-r450784e-main.zip
-          mv clang-r450784e-main/* .
-          rm -rf clang-r450784e-main clang-r450784e-main.zip
+          # 解压
+          tar -xzf clang.tar.gz
+          rm clang.tar.gz
           
-          # 赋予权限并验证
+          # 验证架构（在 GitHub 服务器上必须输出 x86-64）
+          file bin/clang-14
+          
+          # 赋予权限
           chmod +x bin/*
-          ls -la bin/clang
-      - name: Check Binary Format
-        run: |
-          file clang/bin/clang.real
-          file clang/bin/ld.lld
-          
+
       - name: Configure and Build Kernel
         run: |
           export ARCH=arm64
           export LLVM=1
           export LLVM_IAS=1
           
-          # 指向解压出来的 clang 目录
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
           
-          # 打印验证
           echo "--- Checking Toolchain ---"
-          which clang
-          which ld.lld
           clang --version
+          ld.lld --version
           echo "--------------------------"
           
-          # 配置编译
+          # 配置并编译
           make O=out ARCH=arm64 gki_defconfig
-          
-          # 满核编译
           make O=out ARCH=arm64 -j$(nproc)
 
       - name: Upload Kernel Image
