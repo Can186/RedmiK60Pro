@@ -30,7 +30,22 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget unzip dwarves
+          sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget unzip
+          # 注意：这里不要装 dwarves 包，避免使用系统自带的 pahole
+
+      - name: Compile pahole v1.16
+        run: |
+          # 下载并编译你找到的 v1.16 版本
+          wget -q https://fedorapeople.org/~acme/dwarves/dwarves-1.16.tar.xz
+          tar -xf dwarves-1.16.tar.xz
+          cd dwarves-1.16
+          mkdir build && cd build
+          cmake -D__LIB=lib ..
+          make -j$(nproc)
+          sudo make install
+          
+          # 验证版本
+          pahole --version
 
       - name: Configure and Build Kernel
         run: |
