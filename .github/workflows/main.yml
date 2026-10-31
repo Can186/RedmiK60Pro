@@ -13,19 +13,23 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git git-lfs flex bison libssl-dev libelf-dev bc cpio rsync wget unzip curl
+          sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget unzip
 
-      - name: Download Clang from Release via wget
+      - name: Download Clang via wget
         run: |
           mkdir -p clang && cd clang
           
-          # 用 wget 下载，加大重试次数，防止断流
-          wget https://github.com/Can186/RedmiK60Pro/releases/download/clang/clang-r450784e-main.zip
+          # 【关键】用 wget 直接下载你的 Release 链接
+          # 加上 --tries=5 防止网络抽风断流
+          wget -q --tries=5 --timeout=60 -O clang-r450784e-main.zip https://github.com/Can186/RedmiK60Pro/releases/download/clang/clang-r450784e-main.zip
           
           unzip -q clang-r450784e-main.zip
           mv clang-r450784e-main/* .
           rm -rf clang-r450784e-main clang-r450784e-main.zip
+          
+          # 赋予权限并验证
           chmod +x bin/*
+          ls -la bin/clang
 
       - name: Configure and Build Kernel
         run: |
@@ -33,20 +37,20 @@ jobs:
           export LLVM=1
           export LLVM_IAS=1
           
-          # 指向解压后的 clang/bin
+          # 指向解压出来的 clang 目录
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
           
-          # 验证工具链
+          # 打印验证
           echo "--- Checking Toolchain ---"
           which clang
           which ld.lld
           clang --version
           echo "--------------------------"
           
-          # 配置（使用 gki_defconfig）
+          # 配置编译
           make O=out ARCH=arm64 gki_defconfig
           
-          # 满核多线程编译（-j 后面会自动使用 GitHub 服务器的所有核心）
+          # 满核编译
           make O=out ARCH=arm64 -j$(nproc)
 
       - name: Upload Kernel Image
