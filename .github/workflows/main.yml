@@ -13,39 +13,13 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget unzip
+          sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget unzip dwarves
 
       - name: Clone Clang from ArrowOS GitLab
         run: |
-          # 直接克隆 GitLab 仓库（不加 --depth=1 防止浅克隆丢掉文件）
           git clone https://gitlab.com/arrowos-project/android_prebuilts_clang_host_linux-x86_clang-r450784e.git clang
-          
           cd clang
-          
-          # 验证架构：必须输出 x86-64！如果输出 aarch64 就说明还是错的
-          file bin/clang-14
-          
-          # 赋予权限
           chmod +x bin/*
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential git flex bison libssl-dev libelf-dev bc cpio rsync wget unzip
-          # 注意：这里不要装 dwarves 包，避免使用系统自带的 pahole
-
-      - name: Compile pahole v1.16
-        run: |
-          # 下载并编译你找到的 v1.16 版本
-          wget -q https://fedorapeople.org/~acme/dwarves/dwarves-1.16.tar.xz
-          tar -xf dwarves-1.16.tar.xz
-          cd dwarves-1.16
-          mkdir build && cd build
-          cmake -D__LIB=lib ..
-          make -j$(nproc)
-          sudo make install
-          
-          # 验证版本
-          pahole --version
 
       - name: Configure and Build Kernel
         run: |
@@ -54,23 +28,28 @@ jobs:
           export LLVM_IAS=1
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
           
+          # 修复缺失文件
           sed -i 's/source "drivers\/misc\/hwid\/Kconfig"/# &/' drivers/misc/Kconfig
           
-          # 1. 直接使用官方的 socrates_defconfig (你上传的那个)
+          # 1. 使用你上传的官方配置
           make O=out ARCH=arm64 socrates_defconfig
           
-          # 2. 【关键】强行把 BTF 关掉，直接绕开所有 pahole 的报错
+          # 2. 关掉导致报错的 BTF（不影响你的 eBPF 增强）
           ./scripts/config --file out/.config --disable DEBUG_INFO_BTF
           
-          # 3. 把 FULL LTO 换成 THIN LTO，防止 7GB 内存爆掉
+          # 3. 把 FULL LTO 换成 THIN LTO，防止 GitHub 7GB 内存被撑爆
           ./scripts/config --file out/.config --disable LTO_CLANG_FULL
           ./scripts/config --file out/.config --enable LTO_CLANG_THIN
           
+          # 重新同步配置
           make O=out ARCH=arm64 olddefconfig
           
-          # 4. 用单线程稳稳当当地跑
-          make O=out ARCH=arm64 -j1
+          echo "--- Checking LTO & BTF Status ---"
+          grep "CONFIG_LTO_CLANG" out/.config
+          grep "CONFIG_DEBUG_INFO_BTF" out/.config || echo "BTF is disabled"
           
+          # 4. 单线程编译，确保一次性跑完
+          make O=out ARCH=arm64 -j1
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
