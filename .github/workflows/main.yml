@@ -15,24 +15,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential git git-lfs flex bison libssl-dev libelf-dev bc cpio rsync wget unzip curl
 
-      - name: Download Clang from Release
+      - name: Download Clang from Release via wget
         run: |
           mkdir -p clang && cd clang
           
-          # 【关键】使用 curl 下载，增加重试机制。如果网络断开，会自动重新尝试
-          echo "Downloading Clang zip, please wait..."
-          curl -L -f -O --retry 10 --retry-delay 5 --retry-max-time 300 https://github.com/Can186/RedmiK60Pro/releases/download/clang/clang-r450784e-main.zip
+          # 用 wget 下载，加大重试次数，防止断流
+          wget -q --tries=5 --timeout=60 -O clang-r450784e-main.zip https://github.com/Can186/RedmiK60Pro/releases/download/clang/clang-r450784e-main.zip
           
-          echo "Download finished, unzipping..."
           unzip -q clang-r450784e-main.zip
-          
-          # 提取文件并清理压缩包
           mv clang-r450784e-main/* .
           rm -rf clang-r450784e-main clang-r450784e-main.zip
-          
-          # 赋予执行权限
           chmod +x bin/*
-          echo "Clang setup complete!"
 
       - name: Configure and Build Kernel
         run: |
