@@ -54,27 +54,23 @@ jobs:
           export LLVM_IAS=1
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
           
-          # 修复缺失文件
           sed -i 's/source "drivers\/misc\/hwid\/Kconfig"/# &/' drivers/misc/Kconfig
           
-          # 生成基础配置
-          make O=out ARCH=arm64 gki_defconfig
+          # 1. 直接使用官方的 socrates_defconfig (你上传的那个)
+          make O=out ARCH=arm64 socrates_defconfig
           
-          # 【调整 LTO 策略】保留 THIN LTO 提升性能，坚决关闭最容易爆内存的 FULL LTO
-          ./scripts/config --file out/.config --enable LTO_CLANG
-          ./scripts/config --file out/.config --enable LTO_CLANG_THIN
+          # 2. 【关键】强行把 BTF 关掉，直接绕开所有 pahole 的报错
+          ./scripts/config --file out/.config --disable DEBUG_INFO_BTF
+          
+          # 3. 把 FULL LTO 换成 THIN LTO，防止 7GB 内存爆掉
           ./scripts/config --file out/.config --disable LTO_CLANG_FULL
+          ./scripts/config --file out/.config --enable LTO_CLANG_THIN
           
-          # 重新同步配置（防止被覆盖）
           make O=out ARCH=arm64 olddefconfig
           
-          # 检查最终状态
-          echo "--- Checking LTO Status ---"
-          grep "CONFIG_LTO_CLANG" out/.config || echo "No LTO found"
-          
-          # 【极其关键】为了防止 OOM，把编译线程数降到最低的 -j1 或 -j2
-          # 这会多花些时间，但是最有机会扛过 LTO 链接阶段
+          # 4. 用单线程稳稳当当地跑
           make O=out ARCH=arm64 -j1
+          
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
