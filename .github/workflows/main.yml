@@ -30,7 +30,11 @@ jobs:
           # 赋予权限并验证
           chmod +x bin/*
           ls -la bin/clang
-
+      - name: Check Binary Format
+        run: |
+          file clang/bin/clang.real
+          file clang/bin/ld.lld
+          
       - name: Configure and Build Kernel
         run: |
           export ARCH=arm64
